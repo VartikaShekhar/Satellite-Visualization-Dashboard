@@ -1,77 +1,36 @@
-# import altair as alt
-# import numpy as np
-# import pandas as pd
-# import streamlit as st
-
-# """
-# # Welcome to Streamlit!
-
-# Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-# If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-# forums](https://discuss.streamlit.io).
-
-# In the meantime, below is an example of what you can do with just a few lines of code:
-# """
-
-# num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-# num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
-
-# indices = np.linspace(0, 1, num_points)
-# theta = 2 * np.pi * num_turns * indices
-# radius = indices
-
-# x = radius * np.cos(theta)
-# y = radius * np.sin(theta)
-
-# df = pd.DataFrame({
-#     "x": x,
-#     "y": y,
-#     "idx": indices,
-#     "rand": np.random.randn(num_points),
-# })
-
-# st.altair_chart(alt.Chart(df, height=700, width=700)
-#     .mark_point(filled=True)
-#     .encode(
-#         x=alt.X("x", axis=None),
-#         y=alt.Y("y", axis=None),
-#         color=alt.Color("idx", legend=None, scale=alt.Scale()),
-#         size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-#     ))
-
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-import requests, os, tempfile
+import requests, os, tempfile, pytz
 from datetime import datetime, timedelta
-from skyfield.api import load, Topos, wgs84
+from skyfield.api import load, Topos
 
 # Constants
 f0 = 11.325e9
 c = 3e5
 ts = load.timescale()
 
-# ✅ Use temp dir (fix for Hugging Face Spaces)
+# Use a writable temp dir
 data_dir = os.path.join(tempfile.gettempdir(), "satellite_data")
 os.makedirs(data_dir, exist_ok=True)
 
 st.set_page_config(layout="wide")
 st.title("🛰️ Satellite Visualization Dashboard")
 
-# Sidebar controls
+# Sidebar input
 st.sidebar.header("Ground Station & Time Settings")
 lat = st.sidebar.text_input("Latitude (°)", "43.07154")
 lon = st.sidebar.text_input("Longitude (°)", "-89.40829")
-start_time = st.sidebar.date_input("Start Date", datetime.utcnow().date())
-start_time_time = st.sidebar.time_input("Start Time", datetime.utcnow().time())
-start_time = datetime.combine(start_time, start_time_time)
 
-end_time = st.sidebar.date_input("End Date", datetime.utcnow().date() + timedelta(days=1))
-end_time_time = st.sidebar.time_input("End Time", datetime.utcnow().time())
-end_time = datetime.combine(end_time, end_time_time)
+start_date = st.sidebar.date_input("Start Date", datetime.utcnow().date())
+start_time_input = st.sidebar.time_input("Start Time", datetime.utcnow().time())
+start_time = datetime.combine(start_date, start_time_input).replace(tzinfo=pytz.UTC)
+
+end_date = st.sidebar.date_input("End Date", datetime.utcnow().date() + timedelta(days=1))
+end_time_input = st.sidebar.time_input("End Time", datetime.utcnow().time())
+end_time = datetime.combine(end_date, end_time_input).replace(tzinfo=pytz.UTC)
 
 tle_file_upload = st.sidebar.file_uploader("Upload Custom TLE (.txt)", type=["txt"])
 use_default = st.sidebar.checkbox("Use Starlink TLE from Celestrak", value=True)
@@ -149,7 +108,7 @@ if run_simulation:
     df["Time_str"] = df["Time"].dt.strftime('%Y-%m-%d %H:%M:%S')
 
     # Doppler Plot
-    st.subheader("📉 Doppler Shift Over Time")
+    st.subheader(" Doppler Shift Over Time")
     fig_doppler = go.Figure()
     for sat, values in doppler_shifts.items():
         times = [datetime.strptime(t, '%Y-%m-%dT%H:%M:%SZ') for t, _ in values]
@@ -159,7 +118,7 @@ if run_simulation:
     st.plotly_chart(fig_doppler, use_container_width=True)
 
     # Polar Plot
-    st.subheader("🧭 Polar Plot (Azimuth vs Elevation)")
+    st.subheader("Polar Plot (Azimuth vs Elevation)")
     fig_polar = px.scatter_polar(
         df, r='Elevation', theta='Azimuth',
         color='Satellite', animation_frame='Time_str',
@@ -168,7 +127,7 @@ if run_simulation:
     st.plotly_chart(fig_polar, use_container_width=True)
 
     # Dome Plot
-    st.subheader("🌌 Dome Plot (3D Satellite Positions)")
+    st.subheader(" Dome Plot (3D Satellite Positions)")
     def polar_to_cartesian(az_deg, el_deg):
         az = np.radians(az_deg)
         el = np.radians(el_deg)
@@ -188,5 +147,5 @@ if run_simulation:
     st.plotly_chart(fig_dome, use_container_width=True)
 
     # Table
-    st.subheader("📋 Satellite Pass Data")
+    st.subheader(" Satellite Pass Data")
     st.dataframe(df)
