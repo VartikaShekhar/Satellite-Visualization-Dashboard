@@ -12,14 +12,14 @@ f0 = 11.325e9
 c = 3e5
 ts = load.timescale()
 
-# Use a writable temp dir
+# Safe writable directory for Hugging Face
 data_dir = os.path.join(tempfile.gettempdir(), "satellite_data")
 os.makedirs(data_dir, exist_ok=True)
 
 st.set_page_config(layout="wide")
 st.title("🛰️ Satellite Visualization Dashboard")
 
-# Sidebar input
+# Sidebar inputs
 st.sidebar.header("Ground Station & Time Settings")
 lat = st.sidebar.text_input("Latitude (°)", "43.07154")
 lon = st.sidebar.text_input("Longitude (°)", "-89.40829")
@@ -74,24 +74,46 @@ def doppler_calc(s, e, v_s, observer, step=1):
                     doppler = f0 * (1 + (-rate.km_per_s) / c) - f0
                     shifts.append((curr.utc_iso(), doppler))
                     graph.append((curr.utc_iso(), alt, az, dist, doppler))
-                except:
-                    pass
+                except Exception as e:
+                    st.warning(f"⚠️ Error at time {curr.utc_iso()}: {e}")
                 curr = ts.utc(curr.utc_datetime() + timedelta(seconds=step))
         doppler_shifts[name] = shifts
         all_graph[name] = graph
     return doppler_shifts, all_graph
 
 if run_simulation:
-    observer = Topos(latitude_degrees=float(lat), longitude_degrees=float(lon))
-    start_sf, end_sf = ts.utc(start_time), ts.utc(end_time)
+    st.info("⏳ Running simulation...")
+
+    if start_time >= end_time:
+        st.error("❌ Start time must be before end time.")
+        st.stop()
+
+    if not use_default and tle_file_upload is None:
+        st.error("❌ Please upload a TLE file or enable 'Use Starlink TLE'")
+        st.stop()
+
+    try:
+        observer = Topos(latitude_degrees=float(lat), longitude_degrees=float(lon))
+    except Exception as e:
+        st.error(f"❌ Invalid coordinates: {e}")
+        st.stop()
 
     tle_path = fetch_tle() if use_default else os.path.join(data_dir, "uploaded.tle")
     if tle_file_upload and not use_default:
         with open(tle_path, "w") as f:
             f.write(tle_file_upload.getvalue().decode("utf-8"))
 
-    v_sats = check_field_of_view(observer, tle_path, start_sf, end_sf)
-    doppler_shifts, all_graph = doppler_calc(start_sf, end_sf, v_sats, observer)
+    try:
+        start_sf, end_sf = ts.utc(start_time), ts.utc(end_time)
+        v_sats = check_field_of_view(observer, tle_path, start_sf, end_sf)
+        doppler_shifts, all_graph = doppler_calc(start_sf, end_sf, v_sats, observer)
+    except Exception as e:
+        st.error(f"❌ Simulation failed: {e}")
+        st.stop()
+
+    if not doppler_shifts:
+        st.warning("⚠️ No satellites visible during this time window.")
+        st.stop()
 
     data = []
     for sat, entries in all_graph.items():
@@ -107,8 +129,10 @@ if run_simulation:
     df = pd.DataFrame(data).sort_values("Time")
     df["Time_str"] = df["Time"].dt.strftime('%Y-%m-%d %H:%M:%S')
 
+    st.success("✅ Simulation complete!")
+
     # Doppler Plot
-    st.subheader(" Doppler Shift Over Time")
+    st.subheader("📉 Doppler Shift Over Time")
     fig_doppler = go.Figure()
     for sat, values in doppler_shifts.items():
         times = [datetime.strptime(t, '%Y-%m-%dT%H:%M:%SZ') for t, _ in values]
@@ -118,7 +142,7 @@ if run_simulation:
     st.plotly_chart(fig_doppler, use_container_width=True)
 
     # Polar Plot
-    st.subheader("Polar Plot (Azimuth vs Elevation)")
+    st.subheader("🧭 Polar Plot (Azimuth vs Elevation)")
     fig_polar = px.scatter_polar(
         df, r='Elevation', theta='Azimuth',
         color='Satellite', animation_frame='Time_str',
@@ -127,7 +151,7 @@ if run_simulation:
     st.plotly_chart(fig_polar, use_container_width=True)
 
     # Dome Plot
-    st.subheader(" Dome Plot (3D Satellite Positions)")
+    st.subheader("🌌 Dome Plot (3D Satellite Positions)")
     def polar_to_cartesian(az_deg, el_deg):
         az = np.radians(az_deg)
         el = np.radians(el_deg)
@@ -146,6 +170,6 @@ if run_simulation:
     fig_dome.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)))
     st.plotly_chart(fig_dome, use_container_width=True)
 
-    # Table
-    st.subheader(" Satellite Pass Data")
+    # Data Table
+    st.subheader("📋 Satellite Pass Data")
     st.dataframe(df)
