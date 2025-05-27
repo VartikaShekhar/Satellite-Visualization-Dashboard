@@ -1,3 +1,7 @@
-altair
-pandas
 streamlit
+plotly
+pandas
+numpy
+skyfield
+pytz
+requests
