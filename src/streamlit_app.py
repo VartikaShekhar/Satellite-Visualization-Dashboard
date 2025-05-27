@@ -45,7 +45,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-import requests, os
+import requests, os, tempfile
 from datetime import datetime, timedelta
 from skyfield.api import load, Topos, wgs84
 
@@ -53,7 +53,9 @@ from skyfield.api import load, Topos, wgs84
 f0 = 11.325e9
 c = 3e5
 ts = load.timescale()
-data_dir = "./data"
+
+# ✅ Use temp dir (fix for Hugging Face Spaces)
+data_dir = os.path.join(tempfile.gettempdir(), "satellite_data")
 os.makedirs(data_dir, exist_ok=True)
 
 st.set_page_config(layout="wide")
@@ -115,11 +117,10 @@ def doppler_calc(s, e, v_s, observer, step=1):
     return doppler_shifts, all_graph
 
 if run_simulation:
-    # Convert location and time
     observer = Topos(latitude_degrees=float(lat), longitude_degrees=float(lon))
     start_sf, end_sf = ts.utc(start_time), ts.utc(end_time)
-    tle_path = fetch_tle() if use_default else os.path.join(data_dir, "uploaded.tle")
 
+    tle_path = fetch_tle() if use_default else os.path.join(data_dir, "uploaded.tle")
     if tle_file_upload and not use_default:
         with open(tle_path, "w") as f:
             f.write(tle_file_upload.getvalue().decode("utf-8"))
@@ -127,7 +128,6 @@ if run_simulation:
     v_sats = check_field_of_view(observer, tle_path, start_sf, end_sf)
     doppler_shifts, all_graph = doppler_calc(start_sf, end_sf, v_sats, observer)
 
-    # Build DataFrame
     data = []
     for sat, entries in all_graph.items():
         for t, alt, az, dist, doppler in entries:
@@ -143,7 +143,7 @@ if run_simulation:
     df["Time_str"] = df["Time"].dt.strftime('%Y-%m-%d %H:%M:%S')
 
     # Doppler Plot
-    st.subheader("Doppler Shift Over Time")
+    st.subheader("📉 Doppler Shift Over Time")
     fig_doppler = go.Figure()
     for sat, values in doppler_shifts.items():
         times = [datetime.strptime(t, '%Y-%m-%dT%H:%M:%SZ') for t, _ in values]
@@ -153,7 +153,7 @@ if run_simulation:
     st.plotly_chart(fig_doppler, use_container_width=True)
 
     # Polar Plot
-    st.subheader("Polar Plot (Azimuth vs Elevation)")
+    st.subheader("🧭 Polar Plot (Azimuth vs Elevation)")
     fig_polar = px.scatter_polar(
         df, r='Elevation', theta='Azimuth',
         color='Satellite', animation_frame='Time_str',
@@ -162,11 +162,11 @@ if run_simulation:
     st.plotly_chart(fig_polar, use_container_width=True)
 
     # Dome Plot
-    st.subheader("Dome Plot (3D Satellite Positions)")
+    st.subheader("🌌 Dome Plot (3D Satellite Positions)")
     def polar_to_cartesian(az_deg, el_deg):
         az = np.radians(az_deg)
         el = np.radians(el_deg)
-        r = 1  # Unit dome
+        r = 1
         x = r * np.cos(el) * np.cos(az)
         y = r * np.cos(el) * np.sin(az)
         z = r * np.sin(el)
@@ -181,7 +181,6 @@ if run_simulation:
     fig_dome.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)))
     st.plotly_chart(fig_dome, use_container_width=True)
 
-    # Data Table
+    # Table
     st.subheader("📋 Satellite Pass Data")
     st.dataframe(df)
-
