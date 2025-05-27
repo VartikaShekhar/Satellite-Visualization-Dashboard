@@ -24,15 +24,28 @@ end_date = st.sidebar.date_input("End Date", datetime.utcnow().date() + timedelt
 end_time_input = st.sidebar.time_input("End Time", (datetime.utcnow() + timedelta(hours=1)).time())
 end_time = datetime.combine(end_date, end_time_input).replace(tzinfo=pytz.UTC)
 
-# Load TLE data
+import tempfile
+import shutil
+
 @st.cache_data
 def load_satellites(url):
     try:
-        sats = load.tle_file(url)
-        return {sat.name: sat for sat in sats}
+        # Create a temp directory that Skyfield can write to
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Override Skyfield's default cache directory
+            original_dir = os.getcwd()
+            os.chdir(temp_dir)
+
+            sats = load.tle_file(url)
+
+            # Restore directory
+            os.chdir(original_dir)
+
+            return {sat.name: sat for sat in sats}
     except Exception as e:
         st.error(f"Error loading TLE: {e}")
         return {}
+
 
 satellites = load_satellites(TLE_URL)
 
