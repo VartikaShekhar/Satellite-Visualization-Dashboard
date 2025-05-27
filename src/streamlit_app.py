@@ -5,7 +5,7 @@ import pytz
 import os
 
 # Constants
-TLE_URL = "https://celestrak.com/NORAD/elements/starlink.txt"
+TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
 ts = load.timescale()
 
 st.set_page_config(layout="wide")
