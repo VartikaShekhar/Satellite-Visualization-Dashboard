@@ -99,9 +99,13 @@ def doppler_calc(start_time_sf, end_time_sf, visible_sats, observer, time_step=1
         doppler_shifts[sat] = shifts
     return doppler_shifts
 
+
+    
+#tabs - for 3 graphs
+
 tab1, tab2, tab3 = st.tabs(["Doppler Shift", "Visibility", "Ground Track"])
 
-# Tab 1: Doppler shift graph
+
 with tab1:
     st.subheader("Doppler Shift")
     if refresh_button:
@@ -113,17 +117,17 @@ with tab1:
     else:
         st.info("Click the run button to see results.")
 
-# Tab 2: 2d view
+
 with tab2:
-    st.subheader("Visibility")
+    st.subheader("2D View")
     if refresh_button:
         st.info(f"Satellites in field of view: {len(visible_sats)}")
     else:
         st.info("Click the run button to see results.")
 
-# Tab 3: 3d view
+
 with tab3:
-    st.subheader("Ground Track")
+    st.subheader("3D View")
     if refresh_button:
         st.info(f"Satellites in field of view: {len(visible_sats)}")
     else:
