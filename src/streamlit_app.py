@@ -9,6 +9,7 @@ import tempfile
 import os
 import requests
 
+os.environ["STREAMLIT_HOME"] = os.getcwd()
 st.set_page_config(layout="wide")
 st.title("Satellite Visualization Dashboard")
 
