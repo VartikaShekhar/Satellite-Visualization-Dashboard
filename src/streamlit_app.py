@@ -49,7 +49,7 @@ def load_satellites(tle_file, use_latest):
                 sats = load.tle_file(tle_io)
             else:
                 # fallback to default TLE file 
-                tle_path = "data/default.tle"
+                tle_path = "src/data/default.tle"
                 sats = load.tle_file(tle_path)
         return {sat.name: sat for sat in sats}
     except Exception as e:
@@ -101,7 +101,7 @@ def doppler_calc(start_time_sf, end_time_sf, visible_sats, observer, time_step=1
 
 tab1, tab2, tab3 = st.tabs(["Doppler Shift", "Visibility", "Ground Track"])
 
-# Tab 1: Doppler shift overview
+# Tab 1: Doppler shift graph
 with tab1:
     st.subheader("Doppler Shift")
     if refresh_button:
@@ -113,7 +113,7 @@ with tab1:
     else:
         st.info("Click the run button to see results.")
 
-# Tab 2: Visibility window count
+# Tab 2: 2d view
 with tab2:
     st.subheader("Visibility")
     if refresh_button:
@@ -121,7 +121,7 @@ with tab2:
     else:
         st.info("Click the run button to see results.")
 
-# Tab 3: Placeholder for ground track view
+# Tab 3: 3d view
 with tab3:
     st.subheader("Ground Track")
     if refresh_button:
