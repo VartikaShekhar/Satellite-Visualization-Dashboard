@@ -1,8 +1,0 @@
-streamlit
-pytz
-skyfield
-requests
-pandas
-matplotlib
-plotly
-numpy
