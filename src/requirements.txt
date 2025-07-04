@@ -1,7 +1,8 @@
 streamlit
-plotly
-pandas
-numpy
-skyfield
 pytz
+skyfield
 requests
+pandas
+matplotlib
+plotly
+numpy
