@@ -16,7 +16,6 @@ import plotly.express as px
 import numpy as np
 
 
-
 st.set_page_config(layout="wide")
 st.sidebar.title("Location and Time settings")
 st.title("Satellite Visualization Dashboard")
@@ -248,9 +247,9 @@ def doppler_calc(s, e, v_s, observer, time_step=1, f0=f0):
                     # Calculate Doppler shift at the current time
                     pos = (info["obj"] - observer).at(current_time)
                     alt, az, dist, _, _, range_rate = pos.frame_latlon_and_rates(observer)
- 
+
                     doppler_shift = f0 * ((-1 * range_rate.km_per_s) / c)
- 
+                     
                     # Append the current time and Doppler shift
                     shifts.append((current_time.utc_iso(), doppler_shift))
                     these_ranges.append((current_time.utc_iso(), range_rate.km_per_s))
@@ -572,9 +571,9 @@ with tab1:
 with tab2:
     st.subheader("Polar Plot")
     st.markdown(
-        "This animated polar plot shows where each selected satellite appears in the sky over time. "
-        "Azimuth (angle around you) is the direction, and elevation (distance from the center) is how high above the horizon the satellite is. "
-        "The ground station is at the center of the plot."
+        "This animated polar plot shows the position of each selected satellite in the sky over time. "
+        "The ground station is at the center (zenith), the edge is the horizon. "
+        "Azimuth is the angle around the plot (0°=N, 90°=E, 180°=S, 270°=W)."
     )
 
     graph_col2, control_col2 = st.columns([6, 2])
@@ -585,7 +584,6 @@ with tab2:
             col1, col2 = st.columns([2, 1])
             select_all_polar = col1.checkbox("Select All", value=False)
 
-            # Multiselect before button
             if select_all_polar:
                 selected_sats_polar = st.multiselect(
                     "Satellites",
@@ -594,7 +592,7 @@ with tab2:
                     key="all_sat_selector_polar"
                 )
             else:
-                default_polar = all_satellites[:100]
+                default_polar = all_satellites[:20]
                 selected_sats_polar = st.multiselect(
                     "Satellites",
                     options=all_satellites,
@@ -604,7 +602,6 @@ with tab2:
 
             run_polar = col2.form_submit_button("Done")
 
-            # Save state
             if run_polar:
                 st.session_state["run_polar"] = True
                 st.session_state["selected_sats_polar"] = (
@@ -613,43 +610,81 @@ with tab2:
 
         selected_sats_polar = st.session_state.get("selected_sats_polar", all_satellites[:100])
 
-
     with graph_col2:
         if st.session_state.get("run_polar", False) and selected_sats_polar:
-            frames = []
-            timestamps_set = set()
-
-            # Build frame-wise data (timestamp, az, el, name)
+            # Gather all unique time points for animation
+            all_times = set()
+            sat_positions = {}
             for sat_name in selected_sats_polar:
-                sat_data = all_graph.get(sat_name, [])
-                for t, alt, az, _ in sat_data:
-                    timestamps_set.add(t)
+                data = all_graph.get(sat_name, [])
+                positions = []
+                for t, alt, az, _ in data:
+                    all_times.add(t)
+                    positions.append((t, az.degrees, alt.degrees))
+                sat_positions[sat_name] = positions
 
-            sorted_timestamps = sorted(timestamps_set)
-            frame_data = []
-
-            for t in sorted_timestamps:
-                for sat_name in selected_sats_polar:
-                    sat_data = all_graph.get(sat_name, [])
-                    for t_val, alt, az, _ in sat_data:
-                        if t_val == t:
-                            frame_data.append({
-                                'Satellite': sat_name,
-                                'Timestamp': t,
-                                'Azimuth': az.degrees,
-                                'Elevation': 90 - alt.degrees  # radius in polar
-                            })
-
-            df = pd.DataFrame(frame_data)
-
-            if df.empty:
+            sorted_times = sorted(all_times)
+            if not sorted_times:
                 st.warning("No polar data available for selected satellites.")
             else:
-                # Generate azimuth ticks every 30 degrees
-                az_ticks = list(range(0, 360, 30))
-                az_labels = [f"{deg}°" for deg in az_ticks]
+                color_map = px.colors.qualitative.Plotly
+                sat_colors = {sat: color_map[i % len(color_map)] for i, sat in enumerate(selected_sats_polar)}
 
-                # Add N/E/S/W labels at 0, 90, 180, 270
+                # Add trails and animated dots
+                frames = []
+                for idx, current_time in enumerate(sorted_times):
+                    frame_data = []
+                    for sat_name in selected_sats_polar:
+                        positions = sat_positions[sat_name]
+                        past_positions = [(az, el) for t, az, el in positions if t <= current_time]
+                        if not past_positions:
+                            continue
+                        az_trail, el_trail = zip(*past_positions)
+                        r_trail = [90 - el for el in el_trail]
+
+                        # Trail line
+                        frame_data.append(go.Scatterpolar(
+                            r=r_trail,
+                            theta=az_trail,
+                            mode="lines",
+                            line=dict(width=1.5, color=sat_colors[sat_name]),
+                            name=f"{sat_name} Trail",
+                            showlegend=False,
+                            hoverinfo="skip"
+                        ))
+
+                        # Latest position
+                        az, el = az_trail[-1], el_trail[-1]
+                        frame_data.append(go.Scatterpolar(
+                            r=[90 - el],
+                            theta=[az],
+                            mode="markers",
+                            marker=dict(size=12, color=sat_colors[sat_name]),
+                            name=sat_name,
+                            showlegend=False,
+                            hovertemplate=f"{sat_name}<br>Azimuth: {az:.1f}°<br>Elevation: {el:.1f}°"
+                        ))
+
+                    frames.append(go.Frame(data=frame_data, name=str(idx)))
+
+                # Initial data: all satellites at their first available time (show just the first dot)
+                initial_data = []
+                for idx, sat_name in enumerate(selected_sats_polar):
+                    positions = sat_positions[sat_name]
+                    if positions:
+                        az, el = positions[0][1], positions[0][2]
+                        r = 90 - el
+                        initial_data.append(go.Scatterpolar(
+                            r=[r],
+                            theta=[az],
+                            mode="markers",
+                            marker=dict(size=12, color=sat_colors[sat_name]),
+                            name=sat_name,
+                           # showlegend=True,  # Always show legend for all satellites
+                            hovertemplate=f"{sat_name}<br>Azimuth: {az:.1f}°<br>Elevation: {el:.1f}°"
+                        ))
+
+                az_ticks = list(range(0, 360, 30))
                 az_labels = [
                     "N" if deg == 0 else
                     "E" if deg == 90 else
@@ -659,36 +694,62 @@ with tab2:
                     for deg in az_ticks
                 ]
 
-                fig = px.scatter_polar(
-                    df,
-                    r="Elevation",
-                    theta="Azimuth",
-                    animation_frame="Timestamp",
-                    color="Satellite",
-                    size_max=16,  # Increased dot size
-                    title="Animated Satellite Polar Plot",
-                    hover_data={"Azimuth": True, "Elevation": True, "Satellite": True}
-                )
+                def format_time_label(t):
+                    try:
+                        dt = pd.to_datetime(t)
+                        user_tz = pytz.timezone(st.session_state["user_tmz_label"])
+                        dt = dt.tz_localize(pytz.UTC).astimezone(user_tz)
+                        return dt.strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        return str(t)
 
-                fig.update_traces(marker=dict(size=12))  # Make satellite dots bigger
+                slider_steps = [{
+                    "label": format_time_label(sorted_times[i]),
+                    "method": "animate",
+                    "args": [[str(i)], {
+                        "frame": {"duration": 0, "redraw": True},
+                        "mode": "immediate",
+                        "transition": {"duration": 0}
+                    }]
+                } for i in range(len(sorted_times))]
+
+                fig = go.Figure(
+                    data=initial_data,
+                    frames=frames
+                )
+                # Optional dashed ring to visualize min elevation threshold
+                min_el = float(st.session_state["min_elevation"])
+                fig.add_trace(go.Scatterpolar(
+                    r=[90 - min_el] * 360,
+                    theta=list(range(360)),
+                    mode="lines",
+                    line=dict(color="gray", dash="dot"),
+                    name=f"Min Elevation = {min_el}°",
+                    showlegend=True
+                ))
 
                 fig.update_layout(
+                    title="Animated Satellite Sky Positions (Polar View)",
+                    margin=dict(l=80, r=80, t=80, b=80),
                     polar=dict(
                         radialaxis=dict(
                             range=[0, 90],
                             angle=90,
                             tickangle=90,
+                            tickvals=list(range(0, 91, 10)),
+                            ticktext=["Zenith"] + [f"{d}°" for d in range(10, 91, 10)],
                             tickfont=dict(color="black")
                         ),
                         angularaxis=dict(
                             direction='clockwise',
                             rotation=90,
-                            tickfont=dict(color="white"),  # White azimuth markings
                             tickvals=az_ticks,
-                            ticktext=az_labels
+                            ticktext=az_labels,
+                            tickfont=dict(color="white", size=12)
                         )
                     ),
-                    height=700,
+                    height=950,
+                    legend=dict(itemsizing='constant'),
                     updatemenus=[{
                         "type": "buttons",
                         "buttons": [{
@@ -707,19 +768,30 @@ with tab2:
                                 "mode": "immediate",
                                 "transition": {"duration": 0}
                             }]
-                        }]
+                        }],
+                        "direction": "left",
+                        "pad": {"r": 10, "t": 0, "b": 0},
+                        "x": 0.15,
+                        "y": -0.18,
+                        "xanchor": "left",
+                        "yanchor": "top",
+                        "showactive": False,
                     }],
                     sliders=[{
                         "active": 0,
-                        "steps": [{
-                            "label": ts,
-                            "method": "animate",
-                            "args": [[ts], {
-                                "frame": {"duration": 0, "redraw": True},
-                                "mode": "immediate",
-                                "transition": {"duration": 0}
-                            }]
-                        } for ts in df["Timestamp"].unique()]
+                        "yanchor": "top",
+                        "xanchor": "left",
+                        "currentvalue": {
+                            "prefix": "Time: ",
+                            "visible": True,
+                            "xanchor": "right"
+                        },
+                        "transition": {"duration": 0, "easing": "cubic-in-out"},
+                        "pad": {"b": 10, "t": 0},
+                        "len": 0.8,
+                        "x": 0.15,
+                        "y": -0.25,
+                        "steps": slider_steps
                     }]
                 )
 
