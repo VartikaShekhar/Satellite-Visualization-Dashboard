@@ -7,8 +7,7 @@ from skyfield.api import wgs84
 import io
 import requests
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+
 import tempfile
 import os
 import plotly.graph_objects as go
@@ -427,6 +426,57 @@ def plot_dome_static(sat_data):
 
     return fig
 
+import numpy as np
+import plotly.graph_objects as go
+
+def plot_dome_with_distance(sat_data, scale=1.0):
+    """
+    sat_data: List of dicts with keys: ['Azimuth', 'Elevation', 'Distance_km', 'Satellite']
+    scale: Divide all distances by this value (e.g., 1000 for 1000 km = 1 unit)
+    """
+    fig = go.Figure()
+
+    # Plot the ground (origin)
+    fig.add_trace(go.Scatter3d(
+        x=[0], y=[0], z=[0],
+        mode='markers',
+        marker=dict(size=8, color='blue'),
+        name='Ground Station'
+    ))
+
+    for sat_name in set(d["Satellite"] for d in sat_data):
+        points = [d for d in sat_data if d["Satellite"] == sat_name]
+        az = np.radians([p["Azimuth"] for p in points])
+        el = np.radians([p["Elevation"] for p in points])
+        r = [p["Distance_km"] / scale for p in points]  # scale distance
+
+        # Convert to 3D Cartesian
+        phi = np.radians(90) - el
+        x = r * np.sin(phi) * np.cos(az)
+        y = r * np.sin(phi) * np.sin(az)
+        z = r * np.cos(phi)
+
+        fig.add_trace(go.Scatter3d(
+            x=x, y=y, z=z,
+            mode='lines+markers',
+            name=sat_name,
+            marker=dict(size=3),
+            line=dict(width=2)
+        ))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='East (scaled)',
+            yaxis_title='North (scaled)',
+            zaxis_title='Up (scaled)',
+            aspectmode='data'
+        ),
+        title='3D Dome Plot with Distance',
+        height=700
+    )
+
+    return fig
+
 
 tab1, tab2, tab3 = st.tabs(["Doppler Shift", "Polar Plot", "Dome Plot"])
 visible_sats = {}
@@ -800,211 +850,45 @@ with tab2:
             st.info("Select and click Done to view the polar plot.")
 
 with tab3:
-    st.subheader("3D Dome Plot")
+    st.subheader("3D Dome Plot (with Distance)")
     st.markdown(
-        "This 3D dome plot shows where satellites move in the sky above you. "
-        "X = East, Y = North, Z = Up. The ground station is at the center."
+        "This 3D dome plot shows where satellites move in the sky above you, with distance from the ground station. "
+        "X = East, Y = North, Z = Up. The ground station is at the center. Distances are scaled (1000 km = 1 unit)."
     )
 
-    if not all_graph:
-        st.info("Run visualization first to compute satellite positions.")
+    all_names = list(all_graph.keys())
+    default_dome = all_names[:5]
+    with st.form("dome_selector_form"):
+        col1, col2 = st.columns([2, 1])
+        select_all_dome = col1.checkbox("Select All", value=False, key="select_all_dome")
+        if select_all_dome:
+            selected_dome_sats = st.multiselect(
+                "Satellites for Dome Plot",
+                options=all_names,
+                default=all_names,
+                key="all_sat_selector_dome"
+            )
+        else:
+            selected_dome_sats = st.multiselect(
+                "Satellites for Dome Plot",
+                options=all_names,
+                default=default_dome,
+                key="manual_sat_selector_dome"
+            )
+        dome_plot_btn = col2.form_submit_button("Done")
+
+    sat_data = []
+    for sat_name in selected_dome_sats:
+        data = all_graph.get(sat_name, [])
+        for t, alt, az, dist in data:
+            sat_data.append({
+                "Azimuth": az.degrees,
+                "Elevation": alt.degrees,
+                "Distance_km": dist.km,
+                "Satellite": sat_name
+            })
+    if sat_data:
+        fig = plot_dome_with_distance(sat_data, scale=1000)
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        dome_col, dome_control = st.columns([7, 2])  # Reduced width for smaller plot
-
-        with dome_control:
-            with st.form("dome_selector_form"):
-                st.markdown("##### Satellite Selection")
-                all_names = list(all_graph.keys())
-
-                col1, col2 = st.columns([2, 1])
-                select_all_dome = col1.checkbox("Select All", value=False)
-
-                if select_all_dome:
-                    dome_sats = st.multiselect(
-                        "Satellites for Dome Plot",
-                        options=all_names,
-                        default=all_names,
-                        key="all_sat_selector_dome"
-                    )
-                else:
-                    default_dome = all_names[:5]
-                    dome_sats = st.multiselect(
-                        "Satellites for Dome Plot",
-                        options=all_names,
-                        default=default_dome,
-                        key="manual_sat_selector_dome"
-                    )
-
-                dome_plot_btn = col2.form_submit_button("Done")
-
-                if dome_plot_btn:
-                    st.session_state["run_dome"] = True
-                    st.session_state["selected_sats_dome"] = (
-                        all_names if select_all_dome else dome_sats
-                    )
-
-            dome_sats = st.session_state.get("selected_sats_dome", all_names[:5])
-
-        with dome_col:
-            if st.session_state.get("run_dome", False) and dome_sats:
-                all_times = set()
-                sat_cartesian = {}
-                for sat_name in dome_sats:
-                    data = all_graph.get(sat_name, [])
-                    cartesian = []
-                    for t, alt, az, _ in data:
-                        r = 1
-                        theta = np.radians(az.degrees)
-                        phi = np.radians(90 - alt.degrees)
-                        x = r * np.sin(phi) * np.cos(theta)
-                        y = r * np.sin(phi) * np.sin(theta)
-                        z = r * np.cos(phi)
-                        cartesian.append((t, x, y, z))
-                        all_times.add(t)
-                    sat_cartesian[sat_name] = cartesian
-
-                sorted_times = sorted(all_times)
-                if not sorted_times:
-                    st.warning("No data for selected satellites.")
-                else:
-                    color_map = px.colors.qualitative.Plotly
-                    sat_colors = {sat: color_map[i % len(color_map)] for i, sat in enumerate(dome_sats)}
-
-                    static_tracks = []
-                    for sat_name in dome_sats:
-                        cartesian = sat_cartesian[sat_name]
-                        if not cartesian:
-                            continue
-                        x_vals = [x for _, x, _, _ in cartesian]
-                        y_vals = [y for _, _, y, _ in cartesian]
-                        z_vals = [z for _, _, _, z in cartesian]
-                        static_tracks.append(go.Scatter3d(
-                            x=x_vals, y=y_vals, z=z_vals,
-                            mode='lines',
-                            name=sat_name,
-                            line=dict(width=2, color=sat_colors[sat_name]),
-                            showlegend=True
-                        ))
-
-                    frames = []
-                    for frame_idx, current_time in enumerate(sorted_times):
-                        frame_data = []
-                        for sat_name in dome_sats:
-                            cartesian = sat_cartesian[sat_name]
-                            if not cartesian:
-                                continue
-                            times = [t for t, _, _, _ in cartesian]
-                            idx = 0
-                            for i, t in enumerate(times):
-                                if t <= current_time:
-                                    idx = i
-                                else:
-                                    break
-                            idx = min(idx, len(cartesian) - 1)
-                            _, x, y, z = cartesian[idx]
-                            frame_data.append(go.Scatter3d(
-                                x=[x], y=[y], z=[z],
-                                mode='markers',
-                                name=f"{sat_name} (now)",
-                                marker=dict(size=8, color=sat_colors[sat_name], symbol='circle'),
-                                showlegend=False
-                            ))
-                        frame_data = static_tracks + frame_data
-                        frames.append(go.Frame(data=frame_data, name=str(frame_idx)))
-
-                    initial_data = static_tracks.copy()
-                    for sat_name in dome_sats:
-                        cartesian = sat_cartesian[sat_name]
-                        if not cartesian:
-                            continue
-                        _, x, y, z = cartesian[0]
-                        initial_data.append(go.Scatter3d(
-                            x=[x], y=[y], z=[z],
-                            mode='markers',
-                            name=f"{sat_name} (now)",
-                            marker=dict(size=8, color=sat_colors[sat_name], symbol='circle'),
-                            showlegend=False
-                        ))
-
-                    def format_time_label(t):
-                        try:
-                            dt = pd.to_datetime(t)
-                            user_tz = pytz.timezone(st.session_state["user_tmz_label"])
-                            dt = dt.tz_localize(pytz.UTC).astimezone(user_tz)
-                            return dt.strftime("%Y-%m-%d %H:%M:%S")
-                        except Exception:
-                            return str(t)
-
-                    slider_steps = [{
-                        "label": format_time_label(sorted_times[i]),
-                        "method": "animate",
-                        "args": [[str(i)], {
-                            "frame": {"duration": 0, "redraw": True},
-                            "mode": "immediate",
-                            "transition": {"duration": 0}
-                        }]
-                    } for i in range(len(sorted_times))]
-
-                    fig = go.Figure(
-                        data=initial_data,
-                        frames=frames
-                    )
-
-                    fig.update_layout(
-                        scene=dict(
-                            xaxis_title='East',
-                            yaxis_title='North',
-                            zaxis_title='Elevation',
-                            aspectmode='cube',
-                            camera=dict(eye=dict(x=1.2, y=1.2, z=1)),
-                        ),
-                        margin=dict(l=0, r=0, t=30, b=0),
-                        height=600,  # Reduced height for better fit
-                        title=f"Satellite Dome View<br>Time: {format_time_label(sorted_times[0])}",
-                        legend=dict(itemsizing='constant'),
-                        updatemenus=[{
-                            "type": "buttons",
-                            "buttons": [{
-                                "label": "Play",
-                                "method": "animate",
-                                "args": [None, {
-                                    "frame": {"duration": 100, "redraw": True},
-                                    "fromcurrent": True,
-                                    "transition": {"duration": 0}
-                                }]
-                            }, {
-                                "label": "Pause",
-                                "method": "animate",
-                                "args": [[None], {
-                                    "frame": {"duration": 0, "redraw": False},
-                                    "mode": "immediate",
-                                    "transition": {"duration": 0}
-                                }]
-                            }],
-                            "direction": "left",
-                            "pad": {"r": 10, "t": 0, "b": 0},
-                            "x": 0.15,
-                            "y": -0.18,
-                            "xanchor": "left",
-                            "yanchor": "top",
-                            "showactive": False,
-                        }],
-                        sliders=[{
-                            "active": 0,
-                            "yanchor": "top",
-                            "xanchor": "left",
-                            "currentvalue": {
-                                "prefix": "Time: ",
-                                "visible": True,
-                                "xanchor": "right"
-                            },
-                            "transition": {"duration": 0, "easing": "cubic-in-out"},
-                            "pad": {"b": 10, "t": 0},
-                            "len": 0.8,
-                            "x": 0.15,
-                            "y": -0.25,
-                            "steps": slider_steps
-                        }]
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
+        st.info("No data for selected satellites.")
