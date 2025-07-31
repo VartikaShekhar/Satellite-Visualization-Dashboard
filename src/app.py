@@ -127,7 +127,23 @@ with st.sidebar.form("input_form"):
     if "use_latest_tle" not in st.session_state:
         st.session_state["use_latest_tle"] = False
     st.session_state["use_latest_tle"] = st.checkbox("Use latest Celestrak Starlink TLE", value=st.session_state["use_latest_tle"])
-    tle_file_obj = st.file_uploader("Upload your own TLE file (.txt)", type=["txt"])
+    
+    # TLE file uploader with size validation
+    tle_file_obj = st.file_uploader(
+        "Upload your own TLE file (.txt)", 
+        type=["txt"],
+        help="Maximum file size: 2MB. For larger files, use the Celestrak option above."
+    )
+    
+    # Validate file size
+    if tle_file_obj is not None:
+        file_size = len(tle_file_obj.getvalue())
+        if file_size > 2 * 1024 * 1024:  # 2MB limit
+            st.error(f"File too large ({file_size/1024:.1f}KB). Maximum size is 2MB. Please use a smaller file or the Celestrak option.")
+            tle_file_obj = None
+        else:
+            print(f"File uploaded successfully ({file_size/1024:.1f}KB)")
+    
     st.session_state["tle_file_obj"] = tle_file_obj
     refresh_button = st.form_submit_button("Run Visualization")
 
@@ -185,8 +201,8 @@ def check_field_of_view(ground_station : GeographicPosition , tle_file : str, st
 
     # events: 0->rises, 1->peaks, 2->sets
     t, events = sat.find_events(ground_station, start_time_sf, end_time_sf, altitude_degrees=min_elevation)
-    if events.size != 0:
-        print(f"SAT: {sat_name}, t: {t.utc_iso()}, events: {events}")
+    # if events.size != 0:
+    #     print(f"SAT: {sat_name}, t: {t.utc_iso()}, events: {events}")
     for ti, event in zip(t, events):
       curr_val = visible_satellites[sat_name].get(event, [])
       if curr_val == []:
@@ -443,7 +459,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
     
     if not sorted_times:
         st.warning("No data available for animation")
-        return go.Figure()
+        st.stop()
     
     # Find target frame index if target_time is provided
     target_frame_idx = 0
@@ -713,15 +729,32 @@ ts = load.timescale()
 # Decide on the TLE file to use:
 if (st.session_state["tle_file_obj"] is not None):
     try:
-        tle_bytes = st.session_state["tle_file_obj"].read()
-        tle_text = tle_bytes.decode('utf-8')
+        if st.session_state["tle_file_obj"] is not None:
+            tle_bytes = st.session_state["tle_file_obj"].read()
+            tle_text = tle_bytes.decode('utf-8')
+        
+        # Validate TLE content
+        if len(tle_text.strip()) == 0:
+            st.error("TLE data is empty. Please provide valid TLE data.")
+            st.stop()
+        
+        # Check if it looks like a TLE file
+        lines = tle_text.strip().split('\n')
+        if len(lines) < 2:
+            st.error("Data doesn't appear to be valid TLE format. TLE data should contain satellite data in two-line format.")
+            st.stop()
+        
         tle_file = os.path.join(curr_dir, "uploaded.tle")
         with open(tle_file, 'w') as f:
             f.write(tle_text)
-        st.toast("Uploaded TLE file successfully!")
+        st.toast("TLE data processed successfully!")
         
+    except UnicodeDecodeError:
+        st.error("File encoding error. Please upload a text file (.txt) with UTF-8 encoding.")
+        st.stop()
     except Exception as e:
-        st.error(f"Error reading uploaded TLE file: {e}")
+        st.error(f"Error processing TLE data: {str(e)}")
+        st.stop()
 
 elif st.session_state["use_latest_tle"]:
     try:
@@ -747,6 +780,7 @@ end_sf = ts.utc(end_datetime)
 
 visible_satellites = check_field_of_view(ground_station, tle_file, start_sf, end_sf, float(st.session_state["min_elevation"]))
 doppler_shifts, all_range_rate, all_graph = doppler_calc(start_sf, end_sf, visible_satellites, observer, time_step=1)
+#print(all_graph['STARLINK-3587'])
 
 tab1, tab2, tab3 = st.tabs(["Doppler Shift", "Polar Plot", "Dome Plot"])
 
@@ -835,174 +869,318 @@ with tab1:
         plot_doppler(doppler_shifts, selected_sats=st.session_state["selected_sats"])
 
 
-   
 with tab2:
     st.subheader("Polar Plot")
     st.markdown(
-        "This polar plot shows satellite positions in the sky. "
-        "The ground station is at the center (zenith), the edge is the horizon. "
-        "Azimuth is the angle around the plot (0°=N, 90°=E, 180°=S, 270°=W)."
+        "This polar plot shows satellite positions in the sky over time. "
+        "The ground station is at the center (zenith), and the edge is the horizon. "
+        "Azimuth is the angle around the circle (0°=N, 90°=E, 180°=S, 270°=W). "
+        "Elevation is the distance from the center (90° at center, 0° at edge)."
     )
 
-    # Satellite selection form (like in tab 3)
-    all_names_polar = list(all_graph.keys())
-    default_polar = all_names_polar[:5]
+    # Create two columns for satellite selector and time picker
+    selector_col, time_col = st.columns([1, 1])
     
-    with st.form("polar_selector_form"):
-        col1, col2 = st.columns([2, 1])
-        select_all_polar = col1.checkbox("Select All", value=False, key="select_all_polar")
+    with selector_col:
+        # Satellite selection form (like tab3)
+        all_names_polar = list(all_graph.keys())  # Only satellites in field of view
+        default_polar = all_names_polar[:10]
         
-        if select_all_polar:
-            selected_polar_sats = st.multiselect(
-                "Satellites for Polar Plot",
-                options=all_names_polar,
-                default=all_names_polar,
-                key="all_sat_selector_polar"
-            )
-        else:
-            selected_polar_sats = st.multiselect(
-                "Satellites for Polar Plot",
-                options=all_names_polar,
-                default=default_polar,
-                key="manual_sat_selector_polar"
-            )
-        polar_plot_btn = col2.form_submit_button("Done")
+        with st.form("polar_selector_form"):
+            col1, col2 = st.columns([2, 1])
+            select_all_polar = col1.checkbox("Select All", value=False, key="select_all_polar")
+            
+            if select_all_polar:
+                selected_polar_sats = st.multiselect(
+                    "Satellites for Polar Plot",
+                    options=all_names_polar,
+                    default=all_names_polar,
+                    help="All satellites are selected.",
+                    key="all_sat_selector_polar"
+                )
+            else:
+                selected_polar_sats = st.multiselect(
+                    "Satellites for Polar Plot",
+                    options=all_names_polar,
+                    default=default_polar,
+                    help="Choose one or more satellites to display.",
+                    key="manual_sat_selector_polar"
+                )
+            polar_plot_btn = col2.form_submit_button("Done")
 
-    # Create empty polar plot layout
-    fig = go.Figure()
-    
-    # Check if satellites are selected and form is submitted
-    if selected_polar_sats and polar_plot_btn:
-        # Prepare data for selected satellites
-        polar_data = []
+    with time_col:
+        # Time picker interface
+        if selected_polar_sats:
+            with st.form("polar_time_picker_form"):
+                st.markdown("**Jump to time:**")
+                
+                # Create time picker columns with jump button
+                time_col1, time_col2, time_col3, time_col4, jump_col = st.columns([1, 1, 1, 1, 1])
+                
+                with time_col1:
+                    hour = st.selectbox("Hour", range(0, 24), index=10, key="polar_hour")
+                
+                with time_col2:
+                    minute = st.selectbox("Minute", range(0, 60), index=30, key="polar_minute")
+                
+                with time_col3:
+                    second = st.selectbox("Second", range(0, 60), index=0, key="polar_second")
+                
+                with time_col4:
+                    jump_date = st.date_input("Date", value=datetime.now().date(), key="polar_date")
+                
+                with jump_col:
+                    st.write("") 
+                    jump_btn = st.form_submit_button("Jump", type="primary")
+                    if jump_btn:
+                        time_input = f"{jump_date} {hour:02d}:{minute:02d}:{second:02d}"
+                        if time_input:
+                            st.session_state["polar_jump_to_time"] = time_input
+                            st.toast(f"Jumping to {time_input}")
+                        else:
+                            st.warning("Please enter a timestamp")
+
+    # Polar plot implementation
+    if selected_polar_sats:
+        # Filter all_graph to only include selected satellites
+        filtered_graph = {sat: all_graph[sat] for sat in selected_polar_sats if sat in all_graph}
         
-        # Collect all timestamps and satellite positions for animation
-        all_times = set()
-        sat_positions = {}
-        
-        for sat_name in selected_polar_sats:
-            if sat_name in all_graph:
-                data = all_graph[sat_name]
+        if filtered_graph:
+            # Collect all unique timestamps and create full tracks
+            all_times = set()
+            sat_positions = {}
+            sat_tracks = {}
+            
+            # Color palette for satellites
+            colors = px.colors.qualitative.Plotly
+            
+            # Function to create lighter version of a color
+            def lighten_color(color, factor=0.6):
+                """Create a lighter version of a color by mixing with white"""
+                import colorsys
+                # Convert hex to RGB
+                color = color.lstrip('#')
+                r, g, b = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+                # Convert to HSV
+                h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
+                # Increase value (brightness) and decrease saturation
+                v = min(1.0, v + (1-v) * factor)
+                s = s * (1 - factor * 0.5)
+                # Convert back to RGB
+                r, g, b = colorsys.hsv_to_rgb(h, s, v)
+                # Convert to hex
+                return f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
+            
+            for sat_name, data in filtered_graph.items():
                 positions = []
+                track_az, track_el = [], []
                 
                 for timestamp, alt, az, dist in data:
                     all_times.add(timestamp)
-                    positions.append({
-                        'timestamp': timestamp,
-                        'azimuth': az.degrees,
-                        'elevation': alt.degrees
-                    })
+                    positions.append((timestamp, az.degrees, alt.degrees))
+                    
+                    # Create full track for polar plot
+                    track_az.append(az.degrees)
+                    track_el.append(alt.degrees)
                 
                 sat_positions[sat_name] = positions
-        
-        # Sort timestamps for animation
-        sorted_times = sorted(all_times)
-        
-        if sorted_times:
-            # Create color map for satellites
-            colors = px.colors.qualitative.Plotly
-            sat_colors = {sat: colors[i % len(colors)] for i, sat in enumerate(selected_polar_sats)}
+                sat_tracks[sat_name] = (track_az, track_el)
             
-            # Prepare data for Plotly Express
-            polar_data = []
-            for sat_name in selected_polar_sats:
-                positions = sat_positions[sat_name]
-                for pos in positions:
-                    polar_data.append({
-                        'Satellite': sat_name,
-                        'Time': pd.to_datetime(pos['timestamp']),
-                        'Azimuth': pos['azimuth'],
-                        'Elevation': pos['elevation']
-                    })
+            # Sort timestamps
+            sorted_times = sorted(all_times)
             
-            if polar_data:
-                # Create DataFrame
-                df = pd.DataFrame(polar_data)
-                df['Time_str'] = df['Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                satellites = sorted(df['Satellite'].unique())
+            if not sorted_times:
+                st.warning("No data available for animation")
+                st.stop()
+            
+            # Create initial data with tracks and first positions
+            initial_data = []
+            
+            # Add satellite tracks and target positions
+            target_time = sorted_times[0]
+            for i, (sat_name, positions) in enumerate(sat_positions.items()):
+                # Get track coordinates
+                track_az, track_el = sat_tracks[sat_name]
+                sat_color = colors[i % len(colors)]
                 
-                # Create animated polar plot using Plotly Express
-                fig = px.scatter_polar(
-                    df,
-                    r='Elevation',
-                    theta='Azimuth',
-                    animation_frame='Time_str',
-                    animation_group='Satellite',
-                    color='Satellite',
-                    hover_name='Satellite',
-                    size=[5] * len(df),  # Fixed size for all points
-                    size_max=8,
-                    range_r=[0, 90],  # Normal: horizon at center, zenith at edge
-                    title='Satellite Positions Over Time (Polar Plot)',
-                    labels={'Elevation': 'Altitude (°)', 'Azimuth': 'Azimuth (°)'},
-                    color_discrete_sequence=[sat_colors[sat] for sat in satellites],
-                    category_orders={'Satellite': satellites}
-                )
+                # Add full track (static)
+                initial_data.append(go.Scatterpolar(
+                    r=track_el,
+                    theta=track_az,
+                    mode='lines',
+                    name=f"{sat_name} Track",
+                    line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
+                    showlegend=True
+                ))
                 
-                # Update layout for better appearance
-                fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            range=[0, 90],  # Normal: horizon at center, zenith at edge
-                            angle=90,
-                            tickangle=90,
-                            tickvals=list(range(0, 91, 10)),  # 0, 10, 20, ..., 90
-                            ticktext=[f"{d}°" for d in range(0, 91, 10)],  # 0°, 10°, 20°, ..., 90°
-                            tickfont=dict(color="black")
-                        ),
-                        angularaxis=dict(
-                            direction='clockwise',
-                            rotation=90,
-                            tickvals=[0, 45, 90, 135, 180, 225, 270, 315],  # Every 45 degrees
-                            ticktext=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],  # Add intermediate directions
-                            tickfont=dict(color="white", size=12)
-                        )
+                # Find target position
+                current_pos = None
+                for timestamp, az, el in positions:
+                    if timestamp <= target_time:
+                        current_pos = (az, el)
+                    else:
+                        # Found a timestamp beyond target_time, use the last valid position
+                        break
+                
+                # If no position found, try to use the first available position
+                if current_pos is None and positions:
+                    current_pos = positions[0][1:]  # Use first position as fallback
+                
+                if current_pos:
+                    az, el = current_pos
+                    if el >= float(st.session_state["min_elevation"]):
+                        # Add satellite marker (same color as track)
+                        initial_data.append(go.Scatterpolar(
+                            r=[el],
+                            theta=[az],
+                            mode='markers',
+                            name=sat_name,
+                            marker=dict(size=12, color=sat_color),  # Original bright color for dots
+                            showlegend=False
+                        ))
+            
+            # Create figure with initial data
+            fig = go.Figure(data=initial_data)
+            
+            # Create frames for animation (optimized to reduce data size)
+            frames = []
+            
+            # Sample frames to reduce data size (every 5th frame)
+            frame_step = max(1, len(sorted_times) // 100)  # Max 100 frames
+            frame_indices = range(0, len(sorted_times), frame_step)
+            
+            for idx in frame_indices:
+                current_time = sorted_times[idx]
+                frame_data = []
+                
+                # Add tracks and current satellite positions
+                for i, (sat_name, positions) in enumerate(sat_positions.items()):
+                    track_az, track_el = sat_tracks[sat_name]
+                    sat_color = colors[i % len(colors)]
+                    
+                    # Add track (same in all frames)
+                    frame_data.append(go.Scatterpolar(
+                        r=track_el,
+                        theta=track_az,
+                        mode='lines',
+                        name=f"{sat_name} Track",
+                        line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
+                        showlegend=False
+                    ))
+                    
+                    # Find current position
+                    current_pos = None
+                    for timestamp, az, el in positions:
+                        if timestamp <= current_time:
+                            current_pos = (az, el)
+                        else:
+                            # Found a timestamp beyond current_time, use the last valid position
+                            break
+                    
+                    # If no position found, try to use the first available position
+                    if current_pos is None and positions:
+                        current_pos = positions[0][1:]  # Use first position as fallback
+                    
+                    if current_pos:
+                        az, el = current_pos
+                        if el >= float(st.session_state["min_elevation"]):
+                            # Add satellite marker (same color as track)
+                            frame_data.append(go.Scatterpolar(
+                                r=[el],
+                                theta=[az],
+                                mode='markers',
+                                name=sat_name,
+                                marker=dict(size=12, color=sat_color),  # Original bright color for dots
+                                showlegend=False
+                            ))
+                
+                frames.append(go.Frame(data=frame_data, name=str(idx)))
+            
+            # Add frames
+            fig.frames = frames
+            
+            # Update layout with animation controls
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        range=[90, 0],
+                        angle=90,
+                        tickangle=90,
+                        tickvals=list(range(90, -1, -10)),
+                        ticktext=["Zenith"] + [f"{d}°" for d in range(80, -1, -10)],
+                        tickfont=dict(color="black")
                     ),
-                    height=800
-                )
-            else:
-                st.warning("No data available for selected satellites.")
-                fig = go.Figure()
+                    angularaxis=dict(
+                        direction='clockwise',
+                        rotation=90,
+                        tickvals=[0, 45, 90, 135, 180, 225, 270, 315],
+                        ticktext=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+                        tickfont=dict(color="white", size=12)
+                    )
+                ),
+                title='Animated Polar Plot with Tracks',
+                height=800,
+                updatemenus=[{
+                    "type": "buttons",
+                    "buttons": [
+                        {
+                            "label": "Play",
+                            "method": "animate",
+                            "args": [None, {
+                                "frame": {"duration": 100, "redraw": True},
+                                "fromcurrent": True,
+                                "transition": {"duration": 0}
+                            }]
+                        },
+                        {
+                            "label": "Pause",
+                            "method": "animate",
+                            "args": [[None], {
+                                "frame": {"duration": 0, "redraw": False},
+                                "mode": "immediate",
+                                "transition": {"duration": 0}
+                            }]
+                        }
+                    ],
+                    "direction": "left",
+                    "pad": {"r": 10, "t": 0, "b": 0},
+                    "x": 0.1,
+                    "y": 0,
+                    "xanchor": "right",
+                    "yanchor": "top",
+                    "showactive": False,
+                }],
+                sliders=[{
+                    "active": 0,
+                    "yanchor": "top",
+                    "xanchor": "left",
+                    "currentvalue": {
+                        "prefix": "Time: ",
+                        "visible": True,
+                        "xanchor": "right"
+                    },
+                    "transition": {"duration": 0, "easing": "cubic-in-out"},
+                    "pad": {"b": 10, "t": 0},
+                    "len": 0.9,
+                    "x": 0.1,
+                    "y": 0,
+                    "steps": [{
+                        "label": sorted_times[i],
+                        "method": "animate",
+                        "args": [[str(i)], {
+                            "frame": {"duration": 0, "redraw": True},
+                            "mode": "immediate",
+                            "transition": {"duration": 0}
+                        }]
+                    } for i in frame_indices]
+                }]
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No data available for selected satellites.")
-            fig = go.Figure()
     else:
-        # Create empty polar plot layout
-        fig = go.Figure()
-        
-        # Add empty scatter polar trace to establish the polar coordinate system
-        fig.add_trace(go.Scatterpolar(
-            r=[],  # Empty elevation data
-            theta=[],  # Empty azimuth data
-            mode='markers',
-            name='Satellites',
-            marker=dict(size=8)
-        ))
-        
-        # Update layout for polar plot
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    range=[0, 90],  # Normal: horizon at center, zenith at edge
-                    angle=90,
-                    tickangle=90,
-                    tickvals=list(range(0, 91, 10)),  # 0, 10, 20, ..., 90
-                    ticktext=[f"{d}°" for d in range(0, 91, 10)],  # 0°, 10°, 20°, ..., 90°
-                    tickfont=dict(color="black")
-                ),
-                angularaxis=dict(
-                    direction='clockwise',
-                    rotation=90,
-                    tickvals=[0, 45, 90, 135, 180, 225, 270, 315],  # Every 45 degrees
-                    ticktext=["N", "NE", "E", "SE", "S", "SW", "W", "NW"],  # Add intermediate directions
-                    tickfont=dict(color="white", size=12)
-                )
-            ),
-            title='Satellite Positions (Polar View)',
-            height=800
-        )
-
-    st.plotly_chart(fig, use_container_width=True)
+        st.info("Please select satellites and click Done to view the polar plot.")
 
 
 with tab3:
@@ -1017,7 +1195,7 @@ with tab3:
    
     
     all_names = list(all_graph.keys())
-    default_dome = all_names[:5]
+    default_dome = all_names[:10]
     with st.form("dome_selector_form"):
         col1, col2 = st.columns([2, 1])
         select_all_dome = col1.checkbox("Select All", value=False, key="select_all_dome")
@@ -1135,7 +1313,3 @@ with tab3:
         else:
             st.info("Please select satellites and click Done to view the animated plot.")
 
-
-
-    
-    #               
