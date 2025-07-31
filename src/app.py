@@ -1,5 +1,3 @@
-import os
-os.environ["HOME"] = os.getcwd()
 import streamlit as st
 import pytz
 from pytz import all_timezones
@@ -10,6 +8,7 @@ import io
 import requests
 import pandas as pd
 import tempfile
+import os
 import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np
@@ -19,17 +18,6 @@ from skyfield.toposlib import GeographicPosition
 from skyfield.timelib import Time
 from typing import Dict, Any
 
-os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
-os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
-os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
-os.environ['STREAMLIT_CONFIG_DIR'] = '/tmp/.streamlit'
-
-# Create necessary directories
-os.makedirs('/tmp/matplotlib', exist_ok=True)
-os.makedirs('/tmp/.streamlit', exist_ok=True)
-
-import pytz
-
 
 st.set_page_config(layout="wide")
 st.sidebar.title("Location and Time settings")
@@ -38,8 +26,8 @@ st.title("Satellite Visualization Dashboard")
 
 f0 = 11.325e9
 c = 3e5 
-curr_dir = "./data"  # Speed of light in km/s
-# Setup output directory
+curr_dir = os.path.join(tempfile.gettempdir(), "satellite_data")  # Safe temp directory
+os.makedirs(curr_dir, exist_ok=True)
 FULL_OUTPUT_DIR = tempfile.gettempdir()
 
 
@@ -1146,3 +1134,6 @@ with tab3:
             st.info("Please select satellites and click Done to view the animated plot.")
 
 
+
+    
+    #               
