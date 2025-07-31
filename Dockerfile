@@ -20,6 +20,7 @@ RUN mkdir -p /app/.streamlit && \
     echo "\
 [server]\n\
 headless = true\n\
+enableXsrfProtection = false\n\
 enableCORS = false\n\
 port = 8501\n\
 \n\
