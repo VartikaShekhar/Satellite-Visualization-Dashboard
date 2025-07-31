@@ -1,6 +1,7 @@
 import os
 import tempfile
-os.environ["HOME"] = tempfile.gettempdir()import streamlit as st
+os.environ["HOME"] = tempfile.gettempdir()
+import streamlit as st
 import pytz
 from pytz import all_timezones
 from datetime import datetime, timedelta
