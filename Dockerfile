@@ -12,7 +12,22 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt ./
 COPY src/ ./src/
 
-RUN pip3 install -r requirements.txt
+# Upgrade Streamlit and install deps
+RUN pip3 install -r requirements.txt && pip3 install streamlit>=1.32.0
+
+# Set up .streamlit config to avoid permission error
+RUN mkdir -p /app/.streamlit && \
+    echo "\
+[server]\n\
+headless = true\n\
+enableCORS = false\n\
+port = 8501\n\
+\n\
+[browser]\n\
+gatherUsageStats = false\n" > /app/.streamlit/config.toml
+
+ENV STREAMLIT_CONFIG_DIR=/app/.streamlit
+ENV HOME=/app
 
 EXPOSE 8501
 
