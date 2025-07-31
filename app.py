@@ -1,5 +1,4 @@
 import os
-os.environ["HOME"] = os.getcwd()
 import streamlit as st
 import pytz
 from pytz import all_timezones
@@ -22,11 +21,8 @@ from typing import Dict, Any
 os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
 os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
 os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
-os.environ['STREAMLIT_CONFIG_DIR'] = '/tmp/.streamlit'
-
 # Create necessary directories
 os.makedirs('/tmp/matplotlib', exist_ok=True)
-os.makedirs('/tmp/.streamlit', exist_ok=True)
 
 import pytz
 
