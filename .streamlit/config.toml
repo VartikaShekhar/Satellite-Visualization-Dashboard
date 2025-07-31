@@ -1,11 +1,7 @@
 [server]
 headless = true
-runOnSave = true
-port = 8501
-address = "0.0.0.0"
+port = 7860
+enableCORS = false
 
 [browser]
 gatherUsageStats = false
-
-[global]
-developmentMode = false
