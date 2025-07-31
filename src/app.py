@@ -1,4 +1,6 @@
-import streamlit as st
+import os
+import tempfile
+os.environ["HOME"] = tempfile.gettempdir()import streamlit as st
 import pytz
 from pytz import all_timezones
 from datetime import datetime, timedelta
@@ -8,7 +10,6 @@ import io
 import requests
 import pandas as pd
 import tempfile
-import os
 import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np
