@@ -1,4 +1,6 @@
 import os
+import tempfile
+os.environ["HOME"] = tempfile.gettempdir()
 import streamlit as st
 import pytz
 from pytz import all_timezones
@@ -18,14 +20,6 @@ from skyfield.toposlib import GeographicPosition
 from skyfield.timelib import Time
 from typing import Dict, Any
 
-os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
-os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
-os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
-# Create necessary directories
-os.makedirs('/tmp/matplotlib', exist_ok=True)
-
-import pytz
-
 
 st.set_page_config(layout="wide")
 st.sidebar.title("Location and Time settings")
@@ -34,8 +28,8 @@ st.title("Satellite Visualization Dashboard")
 
 f0 = 11.325e9
 c = 3e5 
-curr_dir = "./data"  # Speed of light in km/s
-# Setup output directory
+curr_dir = os.path.join(tempfile.gettempdir(), "satellite_data")  # Safe temp directory
+os.makedirs(curr_dir, exist_ok=True)
 FULL_OUTPUT_DIR = tempfile.gettempdir()
 
 
@@ -133,8 +127,35 @@ with st.sidebar.form("input_form"):
     if "use_latest_tle" not in st.session_state:
         st.session_state["use_latest_tle"] = False
     st.session_state["use_latest_tle"] = st.checkbox("Use latest Celestrak Starlink TLE", value=st.session_state["use_latest_tle"])
-    tle_file_obj = st.file_uploader("Upload your own TLE file (.txt)", type=["txt"])
+    
+    # TLE file uploader with size validation
+    tle_file_obj = st.file_uploader(
+        "Upload your own TLE file (.txt)", 
+        type=["txt"],
+        help="Maximum file size: 1MB. For larger files, use the Celestrak option above."
+    )
+    
+    # Alternative: Direct TLE text input
+    use_text_input = st.checkbox("Or paste TLE data directly", value=False)
+    tle_text_input = None
+    if use_text_input:
+        tle_text_input = st.text_area(
+            "Paste TLE data here (two lines per satellite):",
+            height=200,
+            help="Paste TLE data in the format: Line 1, Line 2, Line 1, Line 2, etc."
+        )
+    
+    # Validate file size
+    if tle_file_obj is not None:
+        file_size = len(tle_file_obj.getvalue())
+        if file_size > 1024 * 1024:  # 1MB limit
+            st.error(f"File too large ({file_size/1024:.1f}KB). Maximum size is 1MB. Please use a smaller file or the Celestrak option.")
+            tle_file_obj = None
+        else:
+            st.success(f"File uploaded successfully ({file_size/1024:.1f}KB)")
+    
     st.session_state["tle_file_obj"] = tle_file_obj
+    st.session_state["tle_text_input"] = tle_text_input
     refresh_button = st.form_submit_button("Run Visualization")
 
 
@@ -717,17 +738,36 @@ def write_satellites_to_csv(doppler_shifts, filename="satellite_data.csv"):
 visible_sats = {}
 ts = load.timescale()
 # Decide on the TLE file to use:
-if (st.session_state["tle_file_obj"] is not None):
+if (st.session_state["tle_file_obj"] is not None or st.session_state["tle_text_input"] is not None):
     try:
-        tle_bytes = st.session_state["tle_file_obj"].read()
-        tle_text = tle_bytes.decode('utf-8')
+        if st.session_state["tle_file_obj"] is not None:
+            tle_bytes = st.session_state["tle_file_obj"].read()
+            tle_text = tle_bytes.decode('utf-8')
+        elif st.session_state["tle_text_input"] is not None:
+            tle_text = st.session_state["tle_text_input"]
+        
+        # Validate TLE content
+        if len(tle_text.strip()) == 0:
+            st.error("TLE data is empty. Please provide valid TLE data.")
+            st.stop()
+        
+        # Check if it looks like a TLE file
+        lines = tle_text.strip().split('\n')
+        if len(lines) < 2:
+            st.error("Data doesn't appear to be valid TLE format. TLE data should contain satellite data in two-line format.")
+            st.stop()
+        
         tle_file = os.path.join(curr_dir, "uploaded.tle")
         with open(tle_file, 'w') as f:
             f.write(tle_text)
-        st.toast("Uploaded TLE file successfully!")
+        st.toast("TLE data processed successfully!")
         
+    except UnicodeDecodeError:
+        st.error("File encoding error. Please upload a text file (.txt) with UTF-8 encoding.")
+        st.stop()
     except Exception as e:
-        st.error(f"Error reading uploaded TLE file: {e}")
+        st.error(f"Error processing TLE data: {str(e)}")
+        st.stop()
 
 elif st.session_state["use_latest_tle"]:
     try:
