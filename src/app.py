@@ -137,12 +137,16 @@ with st.sidebar.form("input_form"):
     
     # Validate file size
     if tle_file_obj is not None:
-        file_size = len(tle_file_obj.getvalue())
-        if file_size > 2 * 1024 * 1024:  # 2MB limit
-            st.error(f"File too large ({file_size/1024:.1f}KB). Maximum size is 2MB. Please use a smaller file or the Celestrak option.")
+        try:
+            file_size = len(tle_file_obj.getvalue())
+            if file_size > 2 * 1024 * 1024:  # 2MB limit
+                st.error(f"File too large ({file_size/1024:.1f}KB). Maximum size is 2MB. Please use a smaller file or the Celestrak option.")
+                tle_file_obj = None
+            else:
+                print(f"File uploaded successfully ({file_size/1024:.1f}KB)")
+        except Exception as e:
+            st.error(f"Error reading file: {str(e)}. Please try uploading again.")
             tle_file_obj = None
-        else:
-            print(f"File uploaded successfully ({file_size/1024:.1f}KB)")
     
     st.session_state["tle_file_obj"] = tle_file_obj
     refresh_button = st.form_submit_button("Run Visualization")
@@ -390,11 +394,18 @@ def plot_dome_with_distance(sat_data, scale=1.0):
         y = r * np.sin(phi) * np.sin(az)
         z = r * np.cos(phi)
 
+        # Create hover data with real values
+        hover_data = []
+        for p in points:
+            hover_data.append([p["Distance_km"], p["Elevation"], p["Azimuth"]])
+
         fig.add_trace(go.Scatter3d(
             x=x, y=y, z=z,
             mode='lines',
             name=sat_name,
-            line=dict(width=3)
+            line=dict(width=3),
+            hovertemplate=f"{sat_name}<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<br>Azimuth: %{{customdata[2]:.1f}}°<extra></extra>",
+            customdata=hover_data
         ))
 
     fig.update_layout(
@@ -512,7 +523,9 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='lines',
             name=f"{sat_name} Track",
             line=dict(width=2, color=sat_color),
-            showlegend=True
+            showlegend=True,
+            hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
+            customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
         ))
         
         # Find target position
@@ -546,7 +559,8 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='markers',
                 name=sat_name,
                 marker=dict(size=8, color=sat_color),
-                showlegend=False
+                showlegend=False,
+                hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
             ))
     
     # Create figure with initial data
@@ -583,7 +597,9 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='lines',
                 name=f"{sat_name} Track",
                 line=dict(width=2, color=sat_color),
-                showlegend=False
+                showlegend=False,
+                hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
+                customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
             ))
             
             # Find current position
@@ -617,7 +633,8 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                     mode='markers',
                     name=sat_name,
                     marker=dict(size=8, color=sat_color),
-                    showlegend=False
+                    showlegend=False,
+                    hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
                 ))
         
         frames.append(go.Frame(data=frame_data, name=str(idx)))
@@ -730,8 +747,12 @@ ts = load.timescale()
 if (st.session_state["tle_file_obj"] is not None):
     try:
         if st.session_state["tle_file_obj"] is not None:
-            tle_bytes = st.session_state["tle_file_obj"].read()
-            tle_text = tle_bytes.decode('utf-8')
+            try:
+                tle_bytes = st.session_state["tle_file_obj"].read()
+                tle_text = tle_bytes.decode('utf-8')
+            except Exception as upload_error:
+                st.error(f"Error reading uploaded file: {str(upload_error)}. This might be a temporary issue. Please try uploading again or use the Celestrak option.")
+                st.stop()
         
         # Validate TLE content
         if len(tle_text.strip()) == 0:
@@ -753,7 +774,7 @@ if (st.session_state["tle_file_obj"] is not None):
         st.error("File encoding error. Please upload a text file (.txt) with UTF-8 encoding.")
         st.stop()
     except Exception as e:
-        st.error(f"Error processing TLE data: {str(e)}")
+        st.error(f"Error processing TLE data: {str(e)}. Please try uploading again or use the Celestrak option.")
         st.stop()
 
 elif st.session_state["use_latest_tle"]:
@@ -1009,7 +1030,7 @@ with tab2:
                     theta=track_az,
                     mode='lines',
                     name=f"{sat_name} Track",
-                    line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
+                    line=dict(width=2, color=lighten_color(sat_color)),  # Lighter track color
                     showlegend=True
                 ))
                 
@@ -1036,7 +1057,7 @@ with tab2:
                             mode='markers',
                             name=sat_name,
                             marker=dict(size=12, color=sat_color),  # Original bright color for dots
-                            showlegend=False
+                            showlegend=True
                         ))
             
             # Create figure with initial data
@@ -1065,7 +1086,7 @@ with tab2:
                         mode='lines',
                         name=f"{sat_name} Track",
                         line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
-                        showlegend=False
+                        showlegend=True
                     ))
                     
                     # Find current position
@@ -1091,7 +1112,7 @@ with tab2:
                                 mode='markers',
                                 name=sat_name,
                                 marker=dict(size=12, color=sat_color),  # Original bright color for dots
-                                showlegend=False
+                                showlegend=True
                             ))
                 
                 frames.append(go.Frame(data=frame_data, name=str(idx)))
