@@ -1086,7 +1086,7 @@ with tab2:
                         mode='lines',
                         name=f"{sat_name} Track",
                         line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
-                        showlegend=True
+                        showlegend=False
                     ))
                     
                     # Find current position
