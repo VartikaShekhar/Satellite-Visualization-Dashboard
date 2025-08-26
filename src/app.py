@@ -788,7 +788,7 @@ elif st.session_state["use_latest_tle"]:
     except Exception as e:
         st.error(f"Error fetching latest TLE data: {e}")
 else:
-    st.error("No TLE file provided!")
+    st.error("No TLE file provided! Use teh side bar to upload a TLE or click option to use the latest TLE from Celestrack")
     st.stop()
         
 ground_station = wgs84.latlon(
