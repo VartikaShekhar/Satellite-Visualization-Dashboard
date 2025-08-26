@@ -410,9 +410,9 @@ def plot_dome_with_distance(sat_data, scale=1.0):
 
     fig.update_layout(
         scene=dict(
-            xaxis_title='East (scaled)',
-            yaxis_title='North (scaled)',
-            zaxis_title='Up (scaled)',
+            xaxis_title='East (km)',
+            yaxis_title='North (km)',
+            zaxis_title='Altitude',
             aspectmode='data'
         ),
         #title='3D Dome Plot with Distance',
@@ -645,9 +645,9 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
     # Update layout with animation controls
     fig.update_layout(
         scene=dict(
-            xaxis_title='East (scaled)',
-            yaxis_title='North (scaled)',
-            zaxis_title='Up (scaled)',
+            xaxis_title='East (km)',
+            yaxis_title='North (km)',
+            zaxis_title='Altitude (km)',
             aspectmode='data'
         ),
         title='Animated 3D Dome Plot with Tracks',
@@ -1209,7 +1209,8 @@ with tab3:
     st.markdown(
         "This animated 3D dome plot shows satellite positions over time. "
         "Use the time slider to see satellite movement, or click Play to animate. "
-        "X = East, Y = North, Z = Up. The ground station is at the center. Distances are scaled (1000 km = 1 unit)."
+        "X = East, Y = North, Z = Altitude. The ground station is at the center."
+        "Negative values indicate: East = negative values are West, North = negative values are South."
     )
 
     # Add plot type selector
