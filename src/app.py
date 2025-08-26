@@ -25,6 +25,7 @@ st.set_page_config(layout="wide")
 st.sidebar.title("Location and Time settings")
 st.title("Satellite Visualization Dashboard")
 
+st.markdown(""" <style> .stTabs [data-baseweb="tab-list"] { gap: 12px; } .stTabs [data-baseweb="tab"] { height: 40px; padding: 16px 24px; background-color: black; border-radius: 8px 8px 0 0; border: 1px solid #e9ecef; font-weight: 500; transition: all 0.2s ease; } .stTabs [aria-selected="true"] { background-color: #ffffff; border-bottom: 3px solid #ff4b4b; color: #ff4b4b; font-weight: 600; } .stTabs [aria-selected="false"]:hover { background-color: #e9ecef; transform: translateY(-2px); } </style> """, unsafe_allow_html=True)
 
 f0 = 11.325e9
 c = 3e5 
@@ -523,7 +524,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='lines',
             name=f"{sat_name} Track",
             line=dict(width=2, color=sat_color),
-            showlegend=True,
+            showlegend=False,  # Hide tracks from legend
             hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
             customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
         ))
@@ -559,7 +560,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='markers',
                 name=sat_name,
                 marker=dict(size=8, color=sat_color),
-                showlegend=False,
+                showlegend=True,  # Change from False to True
                 hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
             ))
     
@@ -597,7 +598,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='lines',
                 name=f"{sat_name} Track",
                 line=dict(width=2, color=sat_color),
-                showlegend=False,
+                showlegend=False,  # Hide tracks from legend
                 hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
                 customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
             ))
@@ -633,7 +634,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                     mode='markers',
                     name=sat_name,
                     marker=dict(size=8, color=sat_color),
-                    showlegend=False,
+                    showlegend=True,  # Change from False to True
                     hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
                 ))
         
@@ -1031,7 +1032,7 @@ with tab2:
                     mode='lines',
                     name=f"{sat_name} Track",
                     line=dict(width=2, color=lighten_color(sat_color)),  # Lighter track color
-                    showlegend=True
+                    showlegend=False
                 ))
                 
                 # Find target position
@@ -1209,7 +1210,7 @@ with tab3:
     st.markdown(
         "This animated 3D dome plot shows satellite positions over time. "
         "Use the time slider to see satellite movement, or click Play to animate. "
-        "X = East, Y = North, Z = Altitude. The ground station is at the center."
+        "X = East, Y = North, Z = Altitude. The ground station is at the center. "
         "Negative values indicate: East = negative values are West, North = negative values are South."
     )
 
@@ -1310,7 +1311,7 @@ with tab3:
                     "Satellite": sat_name
                 })
         if sat_data:
-            fig = plot_dome_with_distance(sat_data, scale=1000)
+            fig = plot_dome_with_distance(sat_data, scale=1.0)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for selected satellites.")
@@ -1324,7 +1325,7 @@ with tab3:
             if filtered_graph:
                 # Get target time from session state if available
                 target_time = st.session_state.get("jump_to_time", None)
-                fig = plot_dome_animated(filtered_graph, scale=1000, target_time=target_time)
+                fig = plot_dome_animated(filtered_graph, scale=1.0, target_time=target_time)
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Clear the target time after using it
@@ -1334,4 +1335,3 @@ with tab3:
                 st.info("No data for selected satellites.")
         else:
             st.info("Please select satellites and click Done to view the animated plot.")
-
