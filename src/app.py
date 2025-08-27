@@ -524,7 +524,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='lines',
             name=f"{sat_name} Track",
             line=dict(width=2, color=sat_color),
-            showlegend=False,  # Hide tracks from legend
+            showlegend=True,  
             hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
             customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
         ))
@@ -598,7 +598,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='lines',
                 name=f"{sat_name} Track",
                 line=dict(width=2, color=sat_color),
-                showlegend=False,  # Hide tracks from legend
+                showlegend=True,  # Hide tracks from legend
                 hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
                 customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
             ))
@@ -1032,7 +1032,7 @@ with tab2:
                     mode='lines',
                     name=f"{sat_name} Track",
                     line=dict(width=2, color=lighten_color(sat_color)),  # Lighter track color
-                    showlegend=False
+                    showlegend=True
                 ))
                 
                 # Find target position
@@ -1087,7 +1087,7 @@ with tab2:
                         mode='lines',
                         name=f"{sat_name} Track",
                         line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
-                        showlegend=False
+                        showlegend=True
                     ))
                     
                     # Find current position
