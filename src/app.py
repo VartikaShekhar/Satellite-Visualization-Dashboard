@@ -308,14 +308,14 @@ def doppler_dict(doppler_shifts, f0=f0):
 
 def write_satellites_to_csv(doppler_shifts, filename="satellite_data.csv"):
     """
-    Write all satellites in field of view to a CSV file with columns:
-    1) Satellite name
-    2) Timestamp
-    3) Doppler shift
+    Create CSV data as a string for direct download.
     
     Args:
         doppler_shifts: Dictionary of Doppler shifts from doppler_calc function
-        filename: Output CSV filename
+        filename: Suggested filename for download
+    
+    Returns:
+        Tuple of (csv_data_string, filename) or (None, None) if no data
     """
     rows = []
     
@@ -329,12 +329,12 @@ def write_satellites_to_csv(doppler_shifts, filename="satellite_data.csv"):
     
     if rows:
         df = pd.DataFrame(rows)
-        df.to_csv(filename, index=False)
-        st.success(f"Saved {len(df):,} rows → {filename}")
-        return filename
+        csv_data = df.to_csv(index=False)
+        st.success(f"Ready to download {len(df):,} rows")
+        return csv_data, filename
     else:
         st.warning("No satellite data available to export")
-        return None
+        return None, None
 
 def plot_doppler(doppler_shifts, timezone='UTC', selected_sats=None):
     fig = go.Figure()
@@ -413,7 +413,7 @@ def plot_dome_with_distance(sat_data, scale=1.0):
         scene=dict(
             xaxis_title='East (km)',
             yaxis_title='North (km)',
-            zaxis_title='Altitude',
+            zaxis_title='Altitude (km)',
             aspectmode='data'
         ),
         #title='3D Dome Plot with Distance',
@@ -524,7 +524,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='lines',
             name=f"{sat_name} Track",
             line=dict(width=2, color=sat_color),
-            showlegend=True,  
+            showlegend=False,  
             hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
             customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
         ))
@@ -598,7 +598,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='lines',
                 name=f"{sat_name} Track",
                 line=dict(width=2, color=sat_color),
-                showlegend=True,  # Hide tracks from legend
+                showlegend=False,  # Hide tracks from legend
                 hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
                 customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
             ))
@@ -711,37 +711,6 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
     
     return fig
 
-def write_satellites_to_csv(doppler_shifts, filename="satellite_data.csv"):
-    """
-    Write all satellites in field of view to a CSV file with columns:
-    1) Satellite name
-    2) Timestamp
-    3) Doppler shift
-    
-    Args:
-        doppler_shifts: Dictionary of Doppler shifts from doppler_calc function
-        filename: Output CSV filename
-    """
-    rows = []
-    
-    for sat, shifts in doppler_shifts.items():
-        for timestamp, doppler_shift in shifts:
-            rows.append({
-                'Satellite': sat,
-                'Timestamp (UTC)': timestamp,
-                'Doppler Shift (Hz)': float(doppler_shift)
-            })
-    
-    if rows:
-        df = pd.DataFrame(rows)
-        df.to_csv(filename, index=False)
-        st.toast(f"Saved {len(df):,} rows → {filename}")
-        return filename
-    else:
-        st.warning("No satellite data available to export")
-        return None
-
-
 visible_sats = {}
 ts = load.timescale()
 # Decide on the TLE file to use:
@@ -829,14 +798,13 @@ with tab1:
     
     # Add CSV export button
     if st.button("Export Satellite Data to CSV"):
-        csv_filename = write_satellites_to_csv(doppler_shifts)
-        if csv_filename:
-            with open(csv_filename, 'r') as f:
-                csv_data = f.read()
+        result = write_satellites_to_csv(doppler_shifts)
+        if result:
+            csv_data, filename = result
             st.download_button(
                 label="Download CSV",
                 data=csv_data,
-                file_name=csv_filename,
+                file_name=filename,
                 mime="text/csv"
             )
     
@@ -1032,7 +1000,7 @@ with tab2:
                     mode='lines',
                     name=f"{sat_name} Track",
                     line=dict(width=2, color=lighten_color(sat_color)),  # Lighter track color
-                    showlegend=True
+                    showlegend=False
                 ))
                 
                 # Find target position
@@ -1087,7 +1055,7 @@ with tab2:
                         mode='lines',
                         name=f"{sat_name} Track",
                         line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
-                        showlegend=True
+                        showlegend=False
                     ))
                     
                     # Find current position
@@ -1129,7 +1097,7 @@ with tab2:
                         angle=90,
                         tickangle=90,
                         tickvals=list(range(90, -1, -10)),
-                        ticktext=["Zenith"] + [f"{d}°" for d in range(80, -1, -10)],
+                        ticktext=["Zenith"] + [f"{d}°" for d in range(80, -1, -1)],
                         tickfont=dict(color="black")
                     ),
                     angularaxis=dict(
