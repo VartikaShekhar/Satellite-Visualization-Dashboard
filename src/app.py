@@ -525,7 +525,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='lines',
             name=f"{sat_name} Track",
             line=dict(width=2, color=sat_color),
-            showlegend=False,  
+            showlegend=True,  
             hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
             customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
         ))
@@ -561,7 +561,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='markers',
                 name=sat_name,
                 marker=dict(size=8, color=sat_color),
-                showlegend=True,  # Change from False to True
+                showlegend=True, 
                 hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
             ))
     
@@ -585,7 +585,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
             mode='markers',
             marker=dict(size=8, color='blue'),
             name='Ground Station',
-            showlegend=False
+            showlegend=True
         ))
         
         # Add tracks and current satellite positions
@@ -599,7 +599,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                 mode='lines',
                 name=f"{sat_name} Track",
                 line=dict(width=2, color=sat_color),
-                showlegend=False,  # Hide tracks from legend
+                showlegend=True,
                 hovertemplate=f"{sat_name} Track<br>Distance: %{{customdata[0]:.1f}} km<br>Elevation: %{{customdata[1]:.1f}}°<extra></extra>",
                 customdata=[[dist.km, alt.degrees] for timestamp, alt, az, dist in data]
             ))
@@ -635,7 +635,7 @@ def plot_dome_animated(all_graph, scale=1.0, target_time=None):
                     mode='markers',
                     name=sat_name,
                     marker=dict(size=8, color=sat_color),
-                    showlegend=True,  # Change from False to True
+                    showlegend=True,  
                     hovertemplate=f"{sat_name}<br>Distance: {dist:.1f} km<br>Elevation: {el:.1f}°<br>Azimuth: {az:.1f}°<extra></extra>"
                 ))
         
@@ -872,7 +872,7 @@ with tab1:
         "This graph shows how the Doppler shift (Hz) changes over time for each selected satellite. "
         "The x-axis is time (UTC), the y-axis is Doppler shift."
     )
-    col1, col2 = st.columns([1,4])
+    col1, col2 = st.columns([1,3])
     # Add CSV export button
     with col1:
         if st.button("Export Doppler Data to CSV"):
@@ -1100,7 +1100,7 @@ with tab2:
                     mode='lines',
                     name=f"{sat_name} Track",
                     line=dict(width=2, color=lighten_color(sat_color)),  # Lighter track color
-                    showlegend=False
+                    showlegend=True
                 ))
                 
                 # Find target position
@@ -1155,7 +1155,7 @@ with tab2:
                         mode='lines',
                         name=f"{sat_name} Track",
                         line=dict(width=1, color=lighten_color(sat_color)),  # Lighter track color
-                        showlegend=False
+                        showlegend=True
                     ))
                     
                     # Find current position
