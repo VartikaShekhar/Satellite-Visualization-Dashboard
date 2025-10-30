@@ -28,8 +28,8 @@ st.title("Satellite Visualization Dashboard")
 
 st.markdown(""" <style> .stTabs [data-baseweb="tab-list"] { gap: 12px; } .stTabs [data-baseweb="tab"] { height: 40px; padding: 16px 24px; background-color: black; border-radius: 8px 8px 0 0; border: 1px solid #e9ecef; font-weight: 500; transition: all 0.2s ease; } .stTabs [aria-selected="true"] { background-color: #ffffff; border-bottom: 3px solid #ff4b4b; color: #ff4b4b; font-weight: 600; } .stTabs [aria-selected="false"]:hover { background-color: #e9ecef; transform: translateY(-2px); } </style> """, unsafe_allow_html=True)
 
-f0 = 11.325e9
-c = 3e5 
+f0 = 11.575e9
+c = 3e5 # in km/s
 curr_dir = os.path.join(tempfile.gettempdir(), "satellite_data")  # Safe temp directory
 os.makedirs(curr_dir, exist_ok=True)
 FULL_OUTPUT_DIR = tempfile.gettempdir()
